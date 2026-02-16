@@ -1,0 +1,94 @@
+# SmartPantry Dashboard for Home Assistant
+# Works great on Nest Hub displays (7" and 10")
+#
+# Add to your dashboards via YAML mode, or use the UI builder
+
+type: sections
+title: Smart Pantry
+sections:
+  - type: grid
+    title: Overview
+    cards:
+      # Total items card
+      - type: tile
+        entity: sensor.smart_pantry_all_items
+        name: Total Items
+        icon: mdi:fridge
+        color: green
+        tap_action:
+          action: navigate
+          navigation_path: /pantry
+
+      # Expiring soon warning
+      - type: tile
+        entity: sensor.smart_pantry_expiring_3
+        name: Expiring Soon
+        icon: mdi:alert-circle
+        color: red
+        tap_action:
+          action: navigate
+          navigation_path: /pantry
+
+      # Next expiry
+      - type: tile
+        entity: sensor.template_pantry_next_expiry
+        name: Next to Expire
+        icon: mdi:calendar-alert
+        color: amber
+        tap_action:
+          action: navigate
+          navigation_path: /pantry
+
+      # Total quantity
+      - type: tile
+        entity: sensor.template_pantry_total_quantity
+        name: Total Units
+        icon: mdi:package-variant
+        color: blue
+
+  - type: markdown
+    title: Items List
+    content: >
+      {% set items = state_attr('sensor.smart_pantry_all_items', 'items') %}
+      
+      {% if not items or items | length == 0 %}
+      
+      **Your pantry is empty!** 
+      
+      Add items using the SmartPantry app.
+      
+      {% else %}
+      
+      | Item | Qty | Expires | Status |
+      |------|-----|----------|--------|
+      {% for item in items | sort(attribute='expiration_date') %}
+      {% set days = ((as_timestamp(strptime(item.expiration_date, '%Y-%m-%d')) - as_timestamp(now())) / 86400) | round(0) %}
+      {% if days < 0 %}
+      | ~~{{ item.name }}~~ | {{ item.quantity }} | {{ item.expiration_date }} | 🔴 Expired |
+      {% elif days <= 3 %}
+      | {{ item.name }} | {{ item.quantity }} | {{ item.expiration_date }} | 🟠 {{ days }}d |
+      {% elif days <= 7 %}
+      | {{ item.name }} | {{ item.quantity }} | {{ item.expiration_date }} | 🟡 {{ days }}d |
+      {% else %}
+      | {{ item.name }} | {{ item.quantity }} | {{ item.expiration_date }} | 🟢 {{ days }}d |
+      {% endif %}
+      {% endfor %}
+      
+      {% endif %}
+
+  - type: horizontal-stack
+    cards:
+      - type: button
+        name: Add Item
+        icon: mdi:plus
+        tap_action:
+          url: https://smartpantry.vercel.app
+        icon_height: 48px
+
+      - type: button
+        name: Refresh
+        icon: mdi:refresh
+        tap_action:
+          action: call-service
+          service: homeassistant.reload_all
+        icon_height: 48px

@@ -1,0 +1,29 @@
+{
+  "setup": {
+    "projectId": "REPLACE_WITH_YOUR_PROJECT_ID"
+  },
+  "defaultLocale": "en",
+  "actions": [
+    {
+      "name": "MAIN",
+      "fulfillment": {
+        "conversationName": "smart_pantry"
+      }
+    }
+  ],
+  "conversations": {
+    "smart_pantry": {
+      "name": "smart_pantry",
+      "fulfillment": {
+        " webhook": "PantryWebhook"
+      },
+      "initial Scenes": {
+        "start": {
+          "entryFulfillment": {
+            " webhook": "PantryWebhook"
+          }
+        }
+      }
+    }
+  }
+}

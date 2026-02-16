@@ -1,0 +1,37 @@
+# =============================================
+# RECIPES DASHBOARD CARD - Future Feature
+# =============================================
+
+# Uncomment when recipes feature is ready
+
+# - type: sections
+#   title: Recipes
+#   sections:
+#
+#     - type: grid
+#       title: Top Rated
+#       cards:
+#         - type: tile
+#           entity: sensor.smart_pantry_top_recipes
+#           name: Top Recipes
+#           icon: mdi:star
+#           color: amber
+#
+#     - type: markdown
+#       title: All Recipes
+#       content: >
+#         {% set recipes = state_attr('sensor.smart_pantry_recipes', 'recipes') %}
+#         
+#         {% if not recipes or recipes | length == 0 %}
+#         
+#         **No recipes yet!**
+#         
+#         {% else %}
+#         
+#         | Recipe | Rating | Make Again? |
+#         |--------|--------|-------------|
+#         {% for recipe in recipes | sort(attribute='rating', reverse=true) %}
+#         | {{ recipe.name }} | {{ '⭐' * recipe.rating }} | {{ '👍' if recipe.make_again else '👎' }} |
+#         {% endfor %}
+#         
+#         {% endif %}

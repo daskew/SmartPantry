@@ -1,0 +1,24 @@
+# =============================================
+# PANTRY AUTOMATIONS
+# =============================================
+
+# Daily expiring items notification
+- alias: "Pantry: Daily Expiring Alert"
+  description: "Notify when items are expiring soon"
+  trigger:
+    - platform: time
+      at: "09:00:00"
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.smart_pantry_expiring_3') | int > 0 }}"
+  action:
+    - service: notify.persistent_notification
+      data:
+        title: "🥕 Pantry Alert"
+        message: >
+          {% set items = state_attr('sensor.smart_pantry_expiring_3', 'items') %}
+          You have {{ items | length }} item(s) expiring within 3 days:
+          {% for item in items %}
+          - {{ item.quantity }}x {{ item.name }} (expires {{ item.expiration_date }})
+          {% endfor %}
+  mode: single

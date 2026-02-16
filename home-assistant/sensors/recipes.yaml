@@ -1,0 +1,26 @@
+# =============================================
+# RECIPES SENSOR - Future Feature
+# =============================================
+# Uncomment when you add recipes to SmartPantry
+
+# - platform: rest
+#   name: "SmartPantry Recipes"
+#   unique_id: "smart_pantry_recipes"
+#   resource: "https://smartpantry.vercel.app/api/recipes"
+#   scan_interval: 600
+#   value_template: "{{ value_json.recipes | length }}"
+#   json_attributes:
+#     - recipes
+#   headers:
+#     Content-Type: "application/json"
+
+# - platform: rest
+#   name: "SmartPantry Top Rated Recipes"
+#   unique_id: "smart_pantry_top_recipes"
+#   resource: "https://smartpantry.vercel.app/api/recipes?min_rating=4"
+#   scan_interval: 600
+#   value_template: "{{ value_json.recipes | length }}"
+#   json_attributes:
+#     - recipes
+#   headers:
+#     Content-Type: "application/json"

@@ -1,0 +1,80 @@
+# =============================================
+# SMART PANTRY - SENSOR CONFIGURATION
+# =============================================
+# This folder contains modular sensor configs.
+# Add sensors to your configuration.yaml with:
+#   sensor: !include_dir_merge_list homeassistant/sensors/
+# =============================================
+
+# -------- PANTRY SENSORS --------
+# Core pantry tracking
+- platform: rest
+  name: "SmartPantry All Items"
+  unique_id: "smart_pantry_all_items"
+  resource: "https://smartpantry.vercel.app/api/pantry"
+  scan_interval: 300
+  value_template: "{{ value_json.items | length }}"
+  json_attributes:
+    - items
+  headers:
+    Content-Type: "application/json"
+
+- platform: rest
+  name: "SmartPantry Expiring Soon"
+  unique_id: "smart_pantry_expiring_3"
+  resource: "https://smartpantry.vercel.app/api/pantry?expiring=3"
+  scan_interval: 300
+  value_template: "{{ value_json.items | length }}"
+  json_attributes:
+    - items
+  headers:
+    Content-Type: "application/json"
+
+# -------- TEMPLATE SENSORS --------
+# Derived sensors from raw data
+template:
+  - sensor:
+      - name: "Pantry Next Expiry"
+        state: >
+          {% set items = state_attr('sensor.smart_pantry_all_items', 'items') %}
+          {% if items and items | length > 0 %}
+            {% set sorted = items | sort(attribute='expiration_date') %}
+            {{ sorted[0].name }}
+          {% else %}
+            Empty
+          {% endif %}
+        icon: mdi:calendar-alert
+        attributes:
+          expiration_date: >
+            {% set items = state_attr('sensor.smart_pantry_all_items', 'items') %}
+            {% if items and items | length > 0 %}
+              {% set sorted = items | sort(attribute='expiration_date') %}
+              {{ sorted[0].expiration_date }}
+            {% endif %}
+
+      - name: "Pantry Total Quantity"
+        state: >
+          {% set items = state_attr('sensor.smart_pantry_all_items', 'items') %}
+          {% if items %}
+            {{ items | sum(attribute='quantity') }}
+          {% else %}
+            0
+          {% endif %}
+        icon: mdi:package-variant
+
+      - name: "Pantry Expiring Count"
+        state: "{{ states('sensor.smart_pantry_expiring_3') }}"
+        icon: mdi:alert-circle
+
+# =============================================
+# ADDING NEW FEATURES
+# =============================================
+# When you add new features to SmartPantry:
+# 1. Create a new sensor file in sensors/ folder
+# 2. Add the API endpoint to your SmartPantry backend
+# 3. Include the new sensor file here
+#
+# Example for future features:
+# - sensors/recipes.yaml    -> Recipe sensors
+# - sensors/shopping.yaml   -> Shopping list sensors
+# - sensors/family.yaml     -> Family ratings sensors

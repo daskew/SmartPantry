@@ -1,0 +1,31 @@
+# =============================================
+# SMART PANTRY MASTER DASHBOARD
+# =============================================
+# Combines all feature dashboards
+# Add new features by including their dashboard files
+# =============================================
+
+# Start with pantry (active feature)
+!include dashboards/pantry.yaml
+
+# Uncomment as you add features:
+# !include dashboards/recipes.yaml
+# !include dashboards/shopping.yaml
+
+# =============================================
+# ADDING NEW FEATURES TO HOME ASSISTANT
+# =============================================
+# 
+# 1. Create sensor file: sensors/<feature>.yaml
+# 2. Create dashboard file: dashboards/<feature>.yaml
+# 3. Add API endpoint to SmartPantry backend
+# 4. Include both in the main config below
+#
+# Example for new "shopping" feature:
+#   a. Create sensors/shopping.yaml with REST sensor
+#   b. Create dashboards/shopping.yaml with UI
+#   c. Add to configuration.yaml:
+#        sensor: !include_dir_merge_list sensors/
+#   d. Include in main dashboard:
+#        !include dashboards/shopping.yaml
+# =============================================

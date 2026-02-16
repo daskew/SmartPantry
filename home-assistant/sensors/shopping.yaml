@@ -1,0 +1,21 @@
+# =============================================
+# SHOPPING LIST SENSOR - Future Feature
+# =============================================
+# Uncomment when you add shopping lists to SmartPantry
+
+# - platform: rest
+#   name: "SmartPantry Shopping List"
+#   unique_id: "smart_pantry_shopping"
+#   resource: "https://smartpantry.vercel.app/api/shopping"
+#   scan_interval: 300
+#   value_template: "{{ value_json.items | length }}"
+#   json_attributes:
+#     - items
+#   headers:
+#     Content-Type: "application/json"
+
+# - platform: template
+#   sensor:
+#     - name: "Shopping List Items"
+#       state: "{{ state_attr('sensor.smart_pantry_shopping', 'items') | count }}"
+#       icon: mdi:cart

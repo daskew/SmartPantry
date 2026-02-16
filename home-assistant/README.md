@@ -1,138 +1,132 @@
 # SmartPantry Home Assistant Integration
 
-This folder contains everything you need to add SmartPantry to your Home Assistant dashboard.
+Modular Home Assistant configuration for SmartPantry. Built to expand as you add new features.
 
-## Quick Setup
+---
 
-### 1. Add REST Sensor
+## 📁 Structure
 
-Add this to your `configuration.yaml`:
-
-```yaml
-sensor:
-  - platform: rest
-    name: SmartPantry Items
-    unique_id: smart_pantry_items
-    resource: https://smartpantry.vercel.app/api/pantry
-    scan_interval: 300
-    value_template: "{{ value_json.items | length }}"
-    json_attributes:
-      - items
-    headers:
-      Content-Type: "application/json"
 ```
-
-**For expiring items only:**
-```yaml
-sensor:
-  - platform: rest
-    name: SmartPantry Expiring
-    unique_id: smart_pantry_expiring
-    resource: https://smartpantry.vercel.app/api/pantry?expiring=7
-    scan_interval: 300
-    value_template: "{{ value_json.items | length }}"
-    json_attributes:
-      - items
-```
-
-### 2. Add to Dashboard (GUI)
-
-1. Open Home Assistant → **Dashboards**
-2. Click **"Add Card"** → **"Entities"**
-3. Select the `sensor.smart_pantry_items` entity
-4. Customize the name and icon
-
-Or use the YAML below...
-
-### 3. Full Dashboard YAML
-
-Create a new dashboard or add to existing:
-
-```yaml
-title: Smart Pantry
-views:
-  - title: Pantry
-    cards:
-      - type: entities
-        title: Expiring Soon
-        show_header_toggle: false
-        entities:
-          - entity: sensor.smart_pantry_expiring
-            name: Items Expiring This Week
-            icon: mdi:alert-circle
-
-      - type: custom:stack-in-card
-        cards:
-          - type: horizontal-stack
-            cards:
-              - type: entity
-                entity: sensor.smart_pantry_items
-                name: Total Items
-                icon: mdi:fridge
-
-      - type: markdown
-        title: Pantry Contents
-        content: >
-          {% if state_attr('sensor.smart_pantry_items', 'items') %}
-            {% set items = state_attr('sensor.smart_pantry_items', 'items') %}
-            {% for item in items %}
-            - {{ item.quantity }}x {{ item.name }} - Expires {{ item.expiration_date }}
-            {% endfor %}
-          {% else %}
-            No items in pantry
-          {% endif %}
+home-assistant/
+├── sensors/           # REST API sensors (one file per feature)
+│   ├── pantry.yaml    # ✅ Active: Pantry items
+│   ├── recipes.yaml   # 🔜 Future: Recipe tracking
+│   └── shopping.yaml  # 🔜 Future: Shopping list
+│
+├── dashboards/        # Dashboard cards (one file per feature)
+│   ├── main.yaml      # Master dashboard (includes all)
+│   ├── pantry.yaml    # ✅ Active: Pantry view
+│   └── recipes.yaml   # 🔜 Future: Recipes view
+│
+├── automations/       # Automation rules
+│   └── pantry.yaml    # ✅ Active: Expiry notifications
+│
+└── README.md         # This file
 ```
 
 ---
 
-## API Endpoints Reference
+## 🚀 Quick Setup
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/pantry` | All items |
-| `GET /api/pantry?expiring=7` | Items expiring in 7 days |
+### 1. Add Sensors
+
+In your `configuration.yaml`:
+
+```yaml
+# Load all sensor files
+sensor: !include_dir_merge_list sensors/
+
+# Load template sensors
+template: !include_dir_merge_list_list sensors/
+```
+
+Or paste `sensors/pantry.yaml` contents directly.
+
+### 2. Restart Home Assistant
+
+```bash
+ha core restart
+```
+
+### 3. Add Dashboard
+
+In Home Assistant UI:
+1. **Dashboards** → **Add Card** → **Manual**
+2. Paste content from `dashboards/pantry.yaml`
+
+Or use **Raw Configuration Editor** for YAML mode.
 
 ---
 
-## Voice Commands (via Home Assistant)
+## ➕ Adding New Features
+
+When you build new features into SmartPantry, here's how to add them to Home Assistant:
+
+### Step 1: Add API Endpoint
+In your SmartPantry backend, create `app/api/<feature>/route.ts`
+
+### Step 2: Create Sensor
+Create `sensors/<feature>.yaml`:
+```yaml
+- platform: rest
+  name: "SmartPantry FeatureName"
+  unique_id: "smart_pantry_feature"
+  resource: "https://smartpantry.vercel.app/api/feature"
+  scan_interval: 300
+  value_template: "{{ value_json.data | length }}"
+  json_attributes:
+    - data
+  headers:
+    Content-Type: "application/json"
+```
+
+### Step 3: Create Dashboard Card
+Create `dashboards/<feature>.yaml` with your UI components
+
+### Step 4: Include in Main Dashboard
+Update `dashboards/main.yaml` to include the new feature
+
+---
+
+## 🔜 Planned Features
+
+| Feature | Sensor File | Dashboard File | Status |
+|---------|-------------|----------------|--------|
+| Pantry Items | `pantry.yaml` | `pantry.yaml` | ✅ Ready |
+| Recipes | `recipes.yaml` | `recipes.yaml` | 🔜 Ready to enable |
+| Shopping List | `shopping.yaml` | - | 🔜 Ready to enable |
+| Family Ratings | `ratings.yaml` | - | 📋 To be created |
+| Meal Planning | `meals.yaml` | - | 📋 To be created |
+
+---
+
+## 🎛️ Voice Control
 
 Once set up, you can say:
 - "Hey Google, ask Home Assistant how many items are in the pantry"
-- "Hey Google, show the pantry dashboard" (if added to overview)
+- "Hey Google, show the pantry dashboard" (on Nest Hub)
 
 ---
 
-## Automations Ideas
+## 🔧 Troubleshooting
 
-### Expiring Soon Notification
-```yaml
-automation:
-  - alias: "Pantry Items Expiring Soon"
-    trigger:
-      - platform: time
-        at: "09:00:00"
-    condition:
-      - condition: template
-        value_template: "{{ state_attr('sensor.smart_pantry_expiring', 'items') | length > 0 }}"
-    action:
-      - service: notify.mobile_app_your_phone
-        data:
-          title: "Pantry Alert"
-          message: "{{ state_attr('sensor.smart_pantry_expiring', 'items') | length }} items expiring this week!"
-```
+**Sensor not loading?**
+- Check your Vercel deployment is live
+- Verify the API URL in the sensor config
+
+**Need API authentication?**
+- Let me know and I'll add API key support to the endpoints
+
+**Dashboard not showing?**
+- Ensure you've added the sensor first
+- Check Home Assistant logs for errors
 
 ---
 
-## Troubleshooting
+## 📞 Need Help?
 
-1. **Sensor not loading?** Check the URL is correct and your Vercel deployment is live
-2. **CORS errors?** The API already allows all origins, should work
-3. **Need auth?** Let me know and I can add API key support
-
----
-
-## Custom Card (Optional)
-
-For a better visual, install **"Card Mod"** and **"Stack in Card"** from HACS, then use the YAML above.
-
-Need help? Let me know what questions come up! 🌀
+Ask me! I can help you:
+- Add new features to the HA integration
+- Debug sensor issues
+- Create custom automations
+- Build more complex dashboards

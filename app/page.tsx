@@ -3,22 +3,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CalendarDays, PlusCircle, Trash2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 type PantryItem = {
   id: string;
   name: string;
-  expiresAt: string; // ISO string
-  createdAt: string; // ISO string
+  quantity: number;
+  expiration_date: string; // YYYY-MM-DD
   location?: string;
+  user_id?: string;
+  created_at: string;
 };
 
 type ParsedInput = {
   name: string;
-  expiresAt: string;
+  quantity: number;
+  expiration_date: string;
   location?: string;
 };
-
-const STORAGE_KEY = "smart-pantry-items-v1";
 
 function startOfDay(date: Date) {
   const d = new Date(date);
@@ -43,7 +45,8 @@ function addMonths(date: Date, months: number) {
 }
 
 function formatDisplayDate(iso: string) {
-  const date = new Date(iso);
+  // Handle YYYY-MM-DD format from Supabase
+  const date = new Date(iso + 'T00:00:00');
   if (Number.isNaN(date.getTime())) return "Unknown date";
 
   return date.toLocaleDateString(undefined, {
@@ -53,9 +56,9 @@ function formatDisplayDate(iso: string) {
   });
 }
 
-function getExpirationMeta(expiresAt: string) {
+function getExpirationMeta(expiration_date: string) {
   const today = startOfDay(new Date());
-  const expiry = startOfDay(new Date(expiresAt));
+  const expiry = startOfDay(new Date(expiration_date + 'T00:00:00'));
   const diffMs = expiry.getTime() - today.getTime();
   const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
 
@@ -88,6 +91,15 @@ function parseNaturalLanguageInput(raw: string): ParsedInput | null {
 
   const lower = input.toLowerCase();
   const now = new Date();
+
+  // Default quantity
+  let quantity = 1;
+  
+  // Check for quantity at start: "3 avocados" or "2 yogurts"
+  const qtyMatch = input.match(/^(\d+)\s+/);
+  if (qtyMatch) {
+    quantity = parseInt(qtyMatch[1], 10);
+  }
 
   // Explicit ISO-like date: 2026-02-09
   const dateMatch = input.match(/(\d{4}-\d{2}-\d{2})/);
@@ -200,6 +212,13 @@ function parseNaturalLanguageInput(raw: string): ParsedInput | null {
     cutoffIndex = todayTomorrowIndex;
   }
 
+  // Also cut out leading quantity
+  if (qtyMatch && typeof qtyMatch.index === "number") {
+    if (cutoffIndex === null || qtyMatch.index < cutoffIndex) {
+      cutoffIndex = qtyMatch.index;
+    }
+  }
+
   let name = cutoffIndex !== null && cutoffIndex > 0 ? input.slice(0, cutoffIndex) : input;
 
   // Strip the date / hints out of the visible name
@@ -229,9 +248,13 @@ function parseNaturalLanguageInput(raw: string): ParsedInput | null {
     name = "Pantry item";
   }
 
+  // Format as YYYY-MM-DD for Supabase
+  const expiration_date = startOfDay(expiresAt as Date).toISOString().split('T')[0];
+
   return {
     name,
-    expiresAt: startOfDay(expiresAt as Date).toISOString(),
+    quantity,
+    expiration_date,
     location,
   };
 }
@@ -240,47 +263,31 @@ export default function Page() {
   const [items, setItems] = useState<PantryItem[]>([]);
   const [nlInput, setNlInput] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Hydrate from localStorage on the client only
+  // Fetch from Supabase on mount
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (!stored) return;
-
-      const parsed = JSON.parse(stored) as PantryItem[];
-      if (Array.isArray(parsed)) {
-        setItems(
-          parsed
-            .filter((item) => item && typeof item.name === "string" && typeof item.expiresAt === "string")
-            .map((item) => ({
-              ...item,
-              createdAt: item.createdAt ?? new Date().toISOString(),
-              location: item.location,
-            })),
-        );
+    async function fetchItems() {
+      const { data, error } = await supabase
+        .from('pantry')
+        .select('*')
+        .order('expiration_date', { ascending: true });
+      
+      if (error) {
+        console.error('Error fetching items:', error);
+      } else if (data) {
+        setItems(data as PantryItem[]);
       }
-    } catch {
-      // ignore any malformed data
+      setLoading(false);
     }
+    
+    fetchItems();
   }, []);
-
-  // Persist to localStorage whenever items change
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    } catch {
-      // ignore quota / access errors
-    }
-  }, [items]);
 
   const sortedItems = useMemo(
     () =>
       [...items].sort(
-        (a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime(),
+        (a, b) => new Date(a.expiration_date).getTime() - new Date(b.expiration_date).getTime(),
       ),
     [items],
   );
@@ -339,8 +346,8 @@ export default function Page() {
 
     // If multiple match, prefer the one expiring soonest.
     const itemToDelete = candidates.reduce((best, item) => {
-      const bestTime = new Date(best.expiresAt).getTime();
-      const currentTime = new Date(item.expiresAt).getTime();
+      const bestTime = new Date(best.expiration_date).getTime();
+      const currentTime = new Date(item.expiration_date).getTime();
       return currentTime < bestTime ? item : best;
     }, candidates[0]);
 
@@ -348,7 +355,7 @@ export default function Page() {
     return true;
   }
 
-  function handleAddFromNaturalLanguage() {
+  async function handleAddFromNaturalLanguage() {
     setParseError(null);
 
     const trimmed = nlInput.trim();
@@ -369,20 +376,42 @@ export default function Page() {
       return;
     }
 
-    const now = new Date();
-    const newItem: PantryItem = {
-      id: `${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
-      name: parsed.name,
-      expiresAt: parsed.expiresAt,
-      createdAt: now.toISOString(),
-      location: parsed.location,
-    };
+    // Add to Supabase
+    const { data, error } = await supabase
+      .from('pantry')
+      .insert({
+        name: parsed.name,
+        quantity: parsed.quantity,
+        expiration_date: parsed.expiration_date,
+        location: parsed.location || null,
+      })
+      .select()
+      .single();
 
-    setItems((current) => [...current, newItem]);
+    if (error) {
+      console.error('Error adding item:', error);
+      setParseError("Failed to add item. Please try again.");
+      return;
+    }
+
+    if (data) {
+      setItems((current) => [...current, data as PantryItem]);
+    }
     setNlInput("");
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
+    // Remove from Supabase
+    const { error } = await supabase
+      .from('pantry')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting item:', error);
+      return;
+    }
+
     setItems((current) => current.filter((item) => item.id !== id));
   }
 
@@ -468,7 +497,7 @@ export default function Page() {
               <ul className="mt-1 space-y-1.5 leading-relaxed text-emerald-50/90">
                 <li>Understands simple phrases like &quot;in 3 days&quot;, &quot;tomorrow&quot;, or a YYYY-MM-DD date.</li>
                 <li>If you don&apos;t mention timing, it gently assumes about a week from now.</li>
-                <li>Items are saved privately in your browser with localStorage.</li>
+                <li>Items are saved to the cloud and sync across devices.</li>
               </ul>
               <motion.button
                 type="button"
@@ -489,7 +518,7 @@ export default function Page() {
             <div className="mb-3 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-900/80 text-[11px] font-semibold text-slate-200">
-                  {sortedItems.length}
+                  {loading ? '...' : sortedItems.length}
                 </div>
                 <div>
                   <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
@@ -502,7 +531,11 @@ export default function Page() {
               </div>
             </div>
 
-            {sortedItems.length === 0 ? (
+            {loading ? (
+              <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-600/60 bg-slate-900/40 px-4 py-6 text-center text-xs text-slate-300/80">
+                <p className="font-medium text-slate-100/90">Loading...</p>
+              </div>
+            ) : sortedItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-600/60 bg-slate-900/40 px-4 py-6 text-center text-xs text-slate-300/80">
                 <p className="font-medium text-slate-100/90">
                   No items yet.
@@ -515,7 +548,7 @@ export default function Page() {
               <ul className="space-y-2.5">
                 <AnimatePresence initial={false}>
                   {sortedItems.map((item) => {
-                    const meta = getExpirationMeta(item.expiresAt);
+                    const meta = getExpirationMeta(item.expiration_date);
 
                     const toneClasses =
                       meta.tone === "danger"
@@ -554,7 +587,7 @@ export default function Page() {
                         <div className="flex flex-1 flex-col gap-1.5">
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-sm font-medium text-slate-50">
-                              {item.name}
+                              {item.quantity > 1 ? `${item.quantity}x ` : ''}{item.name}
                             </p>
                             <button
                               type="button"
@@ -572,7 +605,7 @@ export default function Page() {
                               {meta.label}
                             </span>
                             <span className="text-slate-300/80">
-                              Best by <span className="font-medium text-slate-50/90">{formatDisplayDate(item.expiresAt)}</span>
+                              Best by <span className="font-medium text-slate-50/90">{formatDisplayDate(item.expiration_date)}</span>
                             </span>
                             {item.location && (
                               <span className="inline-flex items-center gap-1 rounded-full border border-slate-500/60 bg-slate-800/80 px-2 py-0.5 text-[10px] font-medium text-slate-100/90">
